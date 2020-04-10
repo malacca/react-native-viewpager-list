@@ -2,23 +2,18 @@
   "name": "react-native-viewpager2",
   "title": "React Native Viewpager2",
   "version": "1.0.0",
-  "description": "TODO",
+  "description": "viewpager2 for react-native",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/github_account/react-native-viewpager2.git",
-    "baseUrl": "https://github.com/github_account/react-native-viewpager2"
+    "url": "git+https://github.com/malacca/react-native-viewpager2.git",
+    "baseUrl": "https://github.com/malacca/react-native-viewpager2"
   },
   "keywords": [
     "react-native"
   ],
-  "author": {
-    "name": "Your Name",
-    "email": "yourname@email.com"
-  },
+  "author": "Malacca <malacca42@gmail.com>",
+  "homepage": "https://github.com/malacca/react-native-bqgame",
   "license": "MIT",
   "licenseFilename": "LICENSE",
   "readmeFilename": "README.md",
