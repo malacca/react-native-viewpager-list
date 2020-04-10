@@ -72,7 +72,7 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager2';
     initData={Array}  //绑定数据
     renderItem={Function}  //page渲染函数
 
-    ref="pager"  //一般需要这个, 下面会解释
+    ref="pager"
 />
 ```
 
@@ -88,7 +88,7 @@ renderItem = (item, index) => {
 
 ### `update` / `push` / `updateItem` / `renderItem`
 
-`initData` 属性仅在创建时有效, 后续更新无效, 若更新数据, 必须使用这三个函数，需要给 `ViewPagerList` 设置 `ref` 属性，之后就可以调用 API 了
+`initData` 属性仅在创建时有效, 后续更新无效, 若更新数据, 必须使用以下函数，需要给 `ViewPagerList` 设置 `ref` 属性，之后就可以调用 API 了
 
 ```js
 // 一次性更新所有数据, 可放心使用, 会自动按需更新
@@ -106,12 +106,12 @@ this.refs.pager.renderItem(index);
 
 ## 其他 API
 
-以下 api 属于公用接口
+以下 api 属于共用接口，`ViewPager` 和 `ViewPagerList` 都支持
 
 ### `setCurrentItem`
 
 ```js
-// 滑动到指定页面, smooth=true, 使用过渡效果, 反之不适用
+// 滑动到指定页面, smooth=true, 使用过渡效果, 反之不使用
 this.refs.pager.setCurrentItem(index, smooth);
 ```
 
@@ -119,7 +119,7 @@ this.refs.pager.setCurrentItem(index, smooth);
 
 ```js
 // 获取当前显示的 page index
-// 这是一个异步函数, 若需要同步, 可在 onPageSelected 回调中自行缓存
+// 这是一个异步函数, 若需要同步获取, 可在 onPageSelected 回调中自行缓存
 this.refs.pager.getCurrentItem().then(index => {})
 ```
 
