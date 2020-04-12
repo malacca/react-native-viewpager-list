@@ -7,6 +7,7 @@ import ViewPagerBase from './ViewPagerBase';
  * 可使用这个, 可较大改善内存占用
  */
 class ViewPagerList extends ViewPagerBase {
+  _isPagerList = true;
   _offscreenPage = null;
   _itemCacheSize = 0;
   _viewPageData = [];
@@ -34,61 +35,137 @@ class ViewPagerList extends ViewPagerBase {
     this._itemCacheSize = 5 + 2 * Math.max(0, offscreenPageLimit) + itemSizeAuto - 1;
   }
 
-  // 更新 list 数据
-  update = (listData) => {
-    listData = listData||[];
-    const countChange = listData.length !== this._viewPageData.length;
-    this._viewPageData = listData;
-    for (let from in this._recyleIndex) {
-      this._updateSubView(from, this._recyleIndex[from])
+  _getLoopCount = () => {
+    return this._childrenCount + (this._isLoop ? 2 : 0);
+  }
+
+  // 首次挂载, 需命令通知 currentItem, 因为首次传递 props.currentItem 时
+  // native 端 viewpager 的子 view 个数为 0, currentItem 会被忽略
+  componentDidMount(){
+    this._sendCommand('setCount', [
+      this._getLoopCount(),
+      this._getShowItem(this.props.currentItem)
+    ]);
+  }
+
+  // loop 发生变动, 需修正
+  componentDidUpdate(prevProps){
+    const loop = Boolean(this.props.loop);
+    if (loop !== Boolean(prevProps.loop)) {
+      this._stopAutoPlay();
+      if (loop) {
+        this._sendCommand('insertCount', [0, 1]);
+        this._sendCommand('insertCount', [this._childrenCount + 1, 1]);
+      } else {
+        this._sendCommand('removeCount', [0, 1]);
+        this._sendCommand('removeCount', [this._childrenCount, 1]);
+      }
+      this._startAutoPlay(true);
     }
-    if (countChange) {
-      this._sendCommand('setCount', [listData.length]);
+  }
+
+  // 追加 list 数据
+  push = (data) => {
+    this.insert(this._viewPageData.length, data);
+  }
+
+  // 在 index 位置插入 data (index 本身也会被替换)
+  // index 可缺省, 默认为 0
+  insert = (data, index) => {
+    data=data||[];
+    if (data.length > 0) {
+      index = index === undefined ? 0 : index;
+      const Len = this._viewPageData.length;
+      this._viewPageData.splice(index, 0, ...data);
+      this._updateCount(this._isLoop || index < Len, true);
+    }
+  }
+
+  // 从 index 位置开始移除 length 个(含 index)
+  // length 可缺省, 默认为 1
+  remove = (index, length) => {
+    length = length === undefined ? 1 : length;
+    if (length > 0) {
+      this._viewPageData.splice(index, length);
+      this._updateCount(true, true);
+    }
+  }
+
+  // 一次性更新 list 数据
+  update = (listData) => {
+    const Len = this._viewPageData.length;
+    this._viewPageData = listData||[];
+    this._updateCount(true, Len !== this._viewPageData.length);
+  }
+
+  // 数据发生变化
+  _updateCount = (reset, notice) => {
+    this._setCount(this._viewPageData.length);
+    if (reset) {
+      for (let from in this._recyleIndex) {
+        this._updateSubView(from, this._recyleIndex[from])
+      }
+    }
+    if (notice) {
+      this._sendCommand('setCount', [this._getLoopCount()]);
     }
   }
 
   // 更新 index 数据并重新 render
   updateItem = (index, data) => {
-    this._upItem(index, true, data);
+    this._updateItem(index, false, data);
   }
 
   // 不更新数据, 仅重新 render
   renderItem = (index) => {
-    this._upItem(index, true);
+    this._updateItem(index, true);
   }
 
-  _upItem = (index, force, data) => {
-    if (index >= this._viewPageData.length) {
+  _updateItem = (index, force, data) => {
+    if (index < 0 || index >= this._childrenCount) {
       return;
     }
     if (!force) {
       this._viewPageData[index] = data;
     }
-    for (let k in this._recyleIndex) {
-      if (this._recyleIndex[k] === index) {
-        const key = 'recyle' + k;
-        if (force) {
-          this.refs[key].forceUpdate();
-        } else {
-          this.refs[key].update(this._viewPageData[index], index);
+    let copyIndex = index, k, to;
+    if (this._isLoop) {
+      if (index === 0) {
+        copyIndex = this._childrenCount;
+      } else if (index === this._childrenCount - 1) {
+        copyIndex = -1;
+      }
+    }
+    for (k in this._recyleIndex) {
+      to = this._recyleIndex[k];
+      if (this._isLoop) {
+        if (to === index || to === copyIndex) {
+          this._renderItem(k, index, force);
         }
+      } else if (to === index) {
+        this._renderItem(k, index, force);
         break;
       }
     }
   }
 
-  // 首次挂载, 需再次告知 currentItem, 因为首次传递 props.currentItem 时
-  // viewpager 的子 view 为 0, 会被 native 端忽略
-  componentDidMount(){
-    const {currentItem=0} = this.props;
-    this._sendCommand('setCount', [this._viewPageData.length, currentItem])
+  _renderItem = (k, index, force) => {
+    const key = 'recyle' + k;
+    if (force) {
+      this.refs[key].forceUpdate();
+    } else {
+      this.refs[key].update(this._viewPageData[index], index);
+    }
   }
 
   // 处理 native 端消息
   _onViewpager2Event(e) {
     const nativeEvent = e.nativeEvent;
     if (nativeEvent.event === "bindViewHolder") {
-      this._updateSubView(nativeEvent.from, nativeEvent.to);
+      this._updateSubView(
+        nativeEvent.from, 
+        this._isLoop ? nativeEvent.to - 1 : nativeEvent.to
+      );
     } else if (nativeEvent.event === "addViewHolder") {
       this._itemCacheSize++;
       this.forceUpdate();
@@ -97,13 +174,26 @@ class ViewPagerList extends ViewPagerBase {
     }
   }
 
-  // 重新渲染子 view 
+  // 重新渲染指定的 子view 
   _updateSubView(from, to) {
     const key = 'recyle' + from;
-    if (key in this.refs && to < this._viewPageData.length) {
-      this.refs[key].update(this._viewPageData[to], to);
-      this._recyleIndex[from] = to;
+    if (!(key in this.refs)) {
+      return;
     }
+    let index = to;
+    if (index < 0) {
+      if (!this._isLoop) {
+        return;
+      }
+      index = this._childrenCount - 1;
+    } else if (index >= this._childrenCount) {
+      if (!this._isLoop) {
+        return;
+      }
+      index = 0;
+    }
+    this.refs[key].update(this._viewPageData[index], index);
+    this._recyleIndex[from] = to;
   }
 
   // 插入子 view, 这些 view 会重复使用
@@ -124,7 +214,8 @@ class ViewPagerList extends ViewPagerBase {
   }
 
   render() {
-    this._computeItemStyle();
+    this._updateCount();
+    this._computeBeforeRender();
     return this._renderViewpager({
       offscreenPageLimit: this._offscreenPage,
       children: this._renderSubViews()

@@ -51,40 +51,51 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        vp.setOverScrollMode(View.OVER_SCROLL_NEVER);
         vp.setOrientation(ViewPager2.ORIENTATION_VERTICAL);
         vp.setAdapter(adapter);
         vp.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            private int scrollState = -1;
+            private int scrollPosition = -1;
+
             @Override
             public void onPageScrollStateChanged(int state) {
                 super.onPageScrollStateChanged(state);
-                WritableMap event = Arguments.createMap();
-                event.putString("event", "onPageScrollStateChanged");
-                event.putInt("state", state);
-                adapter.sendPageScrollEvent(event);
+                adapter.sendPageScrollEvent("onPageScrollStateChanged", state);
+                if (state == 0) {
+                    scrollState = -1;
+                    if (scrollPosition != -1) {
+                        onPageChanged(scrollPosition);
+                        scrollPosition = -1;
+                    }
+                } else {
+                    scrollState = state;
+                }
             }
 
             @Override
             public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
                 super.onPageScrolled(position, positionOffset, positionOffsetPixels);
-                WritableMap event = Arguments.createMap();
-                event.putString("event", "onPageScroll");
-                event.putInt("position", position);
-                event.putDouble("offset", positionOffset);
-                event.putInt("offsetPixels", positionOffsetPixels);
-                adapter.sendPageScrollEvent(event);
+                adapter.sendPageScrollEvent(position, positionOffset, positionOffsetPixels);
             }
 
+            // 已选中 page, 但还有一段惯性滑动
             @Override
             public void onPageSelected(int position) {
                 super.onPageSelected(position);
+                adapter.sendPageScrollEvent("onPageSelected", position);
+                if (scrollState == -1) {
+                    onPageChanged(position);
+                } else {
+                    scrollPosition = position;
+                }
+            }
+
+            // 滑动结束, 切换完成
+            private void onPageChanged(int position) {
+                adapter.sendPageScrollEvent("onPageChanged", position);
                 if (!scrollToLastSelectedItem(vp, adapter)) {
                     adapter.bindBackgroundView(position);
                 }
-                WritableMap event = Arguments.createMap();
-                event.putString("event", "onPageSelected");
-                event.putInt("position", position);
-                adapter.sendPageScrollEvent(event);
             }
         });
         return vp;
@@ -116,6 +127,13 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
         if (adapter != null) {
             adapter.setWithBackgroundView(withBackgroundView);
         }
+    }
+
+    // 在滑动到第一个或最后一个时 不显示水波纹效果
+    @ReactProp(name = "disableWave")
+    public void setDisableWave(ViewPager2 view, boolean disableWave) {
+        RecyclerView recyclerView = (RecyclerView) view.getChildAt(0);
+        recyclerView.setOverScrollMode(disableWave ? View.OVER_SCROLL_NEVER : View.OVER_SCROLL_ALWAYS);
     }
 
     // 禁用
@@ -284,6 +302,12 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
                     scrollToIndex(view, args.getInt(1), false);
                 }
                 break;
+            case "insertCount":
+                adapter.insertItemRange(args.getInt(0), args.getInt(1));
+                break;
+            case "removeCount":
+                adapter.removeItemRange(args.getInt(0), args.getInt(1));
+                break;
             case "setCurrentItem":
                 scrollToIndex(view, args.getInt(0), args.getBoolean(1));
                 break;
@@ -298,7 +322,7 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
                 view.beginFakeDrag();
                 break;
             case "fakeDragBy":
-                view.fakeDragBy(PixelUtil.toPixelFromDIP(args.getInt(0)));
+                view.fakeDragBy(PixelUtil.toPixelFromDIP(args.getDouble(0)));
                 break;
             case "endFakeDrag":
                 view.endFakeDrag();

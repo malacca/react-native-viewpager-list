@@ -27,12 +27,17 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager2';
 ```js
 <ViewPager 
    disableSwipe={false}  //禁用滑动(仍可通过API滑动，但用户不可操作)
+   disableWave={false} //是否禁用 滑动到边缘时继续拖拽的水波纹效果
    currentItem={0}  //当前显示 page
    horizontal={false}  //是否为横向(默认为纵向)
-   loop={false}      //是否循环播放
+   loop={false}      //是否循环展示
    offscreenPageLimit={0}  //离屏(预加载) page 个数, 
                            //即当前 page 的前后提前渲染的 page 个数
                            //对于 ViewPagerList 创建后不可不可修改, ViewPager 无此限制
+
+   autoplay={false}  //是否自动播放
+   autoplayTimeout={2500}  //自动播放时间间隔
+   autoplayDirection={false} //自动播放是否仅沿着一个方向(即播放到结尾后停止)
 
    transformer="|card|zoomOut|depth"   //页面过渡效果,默认为空
    scale={0.85}     //过渡效果: 渐隐的最小缩放比例
@@ -44,6 +49,7 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager2';
    //利用该属性可实现类似抖音效果, 背景组件可设置为一个 Video 组件
    //这也可避免滑动过程中更新 子view 导致视频组件不断的销毁与重建
    //当然也可在其他性能敏感的场景使用
+   //该参数仅在首次有效, 创建后更改无效
    getBackground={ReactComponent|Function} 
 
     // 下拉刷新, 与 ScrollView 使用方式一致, 仅支持垂直视图
@@ -58,8 +64,10 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager2';
     onPageScrollStateChanged={({state}) => {}}  
     //滑动过程的回调
     onPageScroll={({position, offset, offsetPixels}) => {}}
-    //页面切换完成后触发
+    //页面切换后触发(此时是刚松开手指, 即将惯性滑动到 position 页面)
     onPageSelected={({position}) => {}}
+    //页面切换完成后触发
+    onPageChanged={({position}) => {}}
 />
 ```
 
@@ -91,22 +99,37 @@ renderItem = (item, index) => {
 `initData` 属性仅在创建时有效, 后续更新无效, 若更新数据, 必须使用以下函数，需要给 `ViewPagerList` 设置 `ref` 属性，之后就可以调用 API 了
 
 ```js
-// 一次性更新所有数据, 可放心使用, 会自动按需更新
-this.refs.pager.update(Array)
-
 // 追加一批数据
 this.refs.pager.push(Array)
+
+// 在 index 位置插入 data (index 本身也会被替换)
+// index 可缺省, 默认为 0, 即插入到开头
+this.refs.pager.insert(Array, index)
+
+// 从 index 位置开始移除 length 个(含 index)
+// length 可缺省, 默认为 1
+this.refs.pager.remove(Array, index)
+
+// 一次性更新所有数据, 可放心使用, 会自动按需更新
+this.refs.pager.update(Array)
 
 // 更新指定 page 的数据
 this.refs.pager.updateItem(index, data);
 
-// 强制更新指定 page 的视图, 会触发 renderItem
+// 强制更新指定 page 的视图(即使其 data 未变动), 会触发 renderItem
 this.refs.pager.renderItem(index);
 ```
 
 ## 其他 API
 
 以下 api 属于共用接口，`ViewPager` 和 `ViewPagerList` 都支持
+
+### `getCount`
+
+```js
+// 获取当前页面数量
+int count = this.refs.pager.getCount();
+```
 
 ### `setCurrentItem`
 
@@ -115,12 +138,16 @@ this.refs.pager.renderItem(index);
 this.refs.pager.setCurrentItem(index, smooth);
 ```
 
-### `getCurrentItem`
+### `getCurrentItem` / `currentItem`
 
 ```js
 // 获取当前显示的 page index
 // 这是一个异步函数, 若需要同步获取, 可在 onPageSelected 回调中自行缓存
 this.refs.pager.getCurrentItem().then(index => {})
+
+// 为了省事, 如果是 loop 或 autoplay 或 绑定了 onPageSelected 监听
+// 可使用下面函数同步获取当前 page index
+int page = this.refs.pager.currentItem()
 ```
 
 ### `beginFakeDrag` / `fakeDragBy` / `endFakeDrag`

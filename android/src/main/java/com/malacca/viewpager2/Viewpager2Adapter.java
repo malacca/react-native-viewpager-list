@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import androidx.core.view.ViewCompat;
 import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.widget.FrameLayout;
 import androidx.annotation.NonNull;
 import android.annotation.SuppressLint;
@@ -41,8 +42,9 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     private final List<View> mViews = new ArrayList<>();
     private SparseArray<ViewHolder> recycledViewHolders;
     private SparseArray<ViewHolder> emptyViewHolders;
-    private SparseArray<Integer> mViewPositions;
+    private SparseIntArray mViewPositions;
     private View backgroundView;
+    private int backgroundViewPosition = -1;
     private int currentHolderId = 0;
     private int itemCount = 0;
 
@@ -90,7 +92,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
             }
             index--;
         }
-        mViews.add(child);
+        mViews.add(index, child);
         if (getItemIsChild()) {
             notifyItemInserted(index);
         } else {
@@ -126,18 +128,47 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         return mViews.size() + (isWithBackgroundView() && backgroundView != null ? 1 : 0);
     }
 
-    // 不使用 子view 作为 child 的, 手动设置子 view 个数
+    // 不使用 子view 作为 child 的, 手动更改子 view 个数
     void setItemCount(int count) {
         if (count == itemCount) {
             return;
         }
-        int oldCount = itemCount;
-        itemCount = count;
-        if (count > oldCount) {
-            notifyItemRangeInserted(oldCount, count - oldCount);
+        if (count > itemCount) {
+            insertItemRange(itemCount, count - itemCount);
         } else {
-            notifyItemRangeRemoved(count, oldCount - count);
+            removeItemRange(count, itemCount - count);
         }
+    }
+    void insertItemRange(int startPosition, int count) {
+        // 修正 mViewPositions
+        if (mViewPositions != null) {
+            for (int i = 0; i < mViewPositions.size(); i++) {
+                int position = mViewPositions.valueAt(i);
+                if (position >= startPosition) {
+                    mViewPositions.setValueAt(i, position + count);
+                }
+            }
+        }
+        itemCount = itemCount + count;
+        notifyItemRangeInserted(startPosition, count);
+    }
+    void removeItemRange(int startPosition, int count) {
+        // 修正 mViewPositions
+        if (mViewPositions != null) {
+            for (int i = 0; i < mViewPositions.size(); i++) {
+                int position = mViewPositions.valueAt(i);
+                if (position < startPosition) {
+                    continue;
+                }
+                if (position < startPosition + count) {
+                    mViewPositions.removeAt(i);
+                } else {
+                    mViewPositions.setValueAt(i, position - count);
+                }
+            }
+        }
+        itemCount = itemCount - count;
+        notifyItemRangeRemoved(startPosition, count);
     }
 
     @Override
@@ -177,6 +208,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         if (container.getChildCount() != 0) {
             // 刚好命中, 啥都不做
             if (holder.holderId == position) {
+                initBackgroundView(container, position);
                 return;
             }
             // 移除子view
@@ -191,6 +223,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         }
         holder.holderId = position;
         container.addView(view);
+        initBackgroundView(container, position);
     }
 
     // 绑定动态 预加载view (viewpager item 重复使用, 动态更新)
@@ -203,6 +236,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
                 // 够用, 直接使用预加载的 子view
                 from = holder.holderId = currentHolderId;
                 container.addView(mViews.get(from));
+                initBackgroundView(container, position);
                 currentHolderId++;
             } else if (recycledViewHolders != null && recycledViewHolders.size() > 0) {
                 // 尝试从回收的 recycledViewHolder 中提取 子view
@@ -213,6 +247,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
                 recycledViewHolders.remove(recycledHolderId);
                 from = holder.holderId = recycledHolderId;
                 container.addView(mViews.get(from));
+                initBackgroundView(container, position);
             } else {
                 // 以上两种方案都失败了(有可能), 使用兜底方案, 通知 js 再创建一个 子view
                 if (emptyViewHolders == null) {
@@ -229,9 +264,9 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         }
         if (isWithBackgroundView()) {
             if (mViewPositions == null) {
-                mViewPositions = new SparseArray<>();
+                mViewPositions = new SparseIntArray();
             }
-            mViewPositions.put(position, from);
+            mViewPositions.put(from, position);
         }
         WritableMap event = Arguments.createMap();
         event.putString("event", "bindViewHolder");
@@ -291,24 +326,49 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         if (!isWithBackgroundView()) {
             return;
         }
+        int mViewPosition = position;
         if (!getItemIsChild()) {
             if (mViewPositions == null) {
+                backgroundViewPosition = position;
                 return;
             }
-            position = mViewPositions.get(position);
+            int positionIndex = mViewPositions.indexOfValue(position);
+            if (positionIndex == -1) {
+                return;
+            }
+            mViewPosition = mViewPositions.keyAt(positionIndex);
         }
-        View view = mViews.get(position);
+        View view = mViews.get(mViewPosition);
         if (view == null) {
             return;
         }
+        FrameLayout viewParent = (FrameLayout) view.getParent();
+        FrameLayout backgroundParent = (FrameLayout) backgroundView.getParent();
+        if (viewParent != null && viewParent == backgroundParent) {
+            return;
+        }
+        if (backgroundParent != null) {
+            backgroundParent.removeView(backgroundView);
+        }
+        if (viewParent == null) {
+            // 初始化时, mView 可能还未 bind 到 viewHolder, 这里仅记录下 position
+            backgroundViewPosition = position;
+        } else {
+            viewParent.addView(backgroundView, 0);
+        }
+    }
+
+    // 若有记录, 绑定 backgroundView 到 viewHolder
+    private void initBackgroundView(FrameLayout container, int position) {
+        if (backgroundViewPosition == -1 || backgroundViewPosition != position) {
+            return;
+        }
+        backgroundViewPosition = -1;
         FrameLayout backgroundParent = (FrameLayout) backgroundView.getParent();
         if (backgroundParent != null) {
             backgroundParent.removeView(backgroundView);
         }
-        FrameLayout parent = (FrameLayout) view.getParent();
-        if (parent != null) {
-            parent.addView(backgroundView, 0);
-        }
+        container.addView(backgroundView, 0);
     }
 
     // 给 js 端发消息
@@ -316,11 +376,30 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         eventListeners = listeners;
     }
 
-    void sendPageScrollEvent(WritableMap event) {
-        String eventType = event.getString("event");
-        if (eventType == null || !eventListeners.hasKey(eventType) || !eventListeners.getBoolean(eventType)) {
+    void sendPageScrollEvent(String eventType, int position) {
+        if (!eventListeners.hasKey(eventType) || !eventListeners.getBoolean(eventType)) {
             return;
         }
+        WritableMap event = Arguments.createMap();
+        event.putString("event", eventType);
+        event.putInt(
+                eventType.equals("onPageScrollStateChanged") ? "state" : "position",
+                position
+        );
+        event.putBoolean("fake", mViewpager2.isFakeDragging());
+        sendEvent(event);
+    }
+
+    void sendPageScrollEvent(int position, float positionOffset, int positionOffsetPixels) {
+        String eventType = "onPageScroll";
+        if (!eventListeners.hasKey(eventType) || !eventListeners.getBoolean(eventType)) {
+            return;
+        }
+        WritableMap event = Arguments.createMap();
+        event.putString("event", eventType);
+        event.putInt("position", position);
+        event.putDouble("offset", positionOffset);
+        event.putInt("offsetPixels", positionOffsetPixels);
         event.putBoolean("fake", mViewpager2.isFakeDragging());
         sendEvent(event);
     }
