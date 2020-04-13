@@ -1,13 +1,13 @@
 # 安装
 
-`yarn add react-native-viewpager2`
+`yarn add react-native-viewpager-list`
 
 （当前仅支持 android，安装完成后无需任何配置）
 
 # 使用
 
 ```js
-import {ViewPager, ViewPagerList} from 'react-native-viewpager2';
+import {ViewPager, ViewPagerList} from 'react-native-viewpager-list';
 
 
 <ViewPager {...props}>

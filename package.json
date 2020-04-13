@@ -1,19 +1,19 @@
 {
-  "name": "react-native-viewpager2",
-  "title": "React Native Viewpager2",
+  "name": "react-native-viewpager-list",
+  "title": "viewpager2 for React Native",
   "version": "1.0.0",
   "description": "viewpager2 for react-native",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/malacca/react-native-viewpager2.git",
-    "baseUrl": "https://github.com/malacca/react-native-viewpager2"
+    "url": "git+https://github.com/malacca/react-native-viewpager-list.git",
+    "baseUrl": "https://github.com/malacca/react-native-viewpager-list"
   },
   "keywords": [
     "react-native"
   ],
   "author": "Malacca <malacca42@gmail.com>",
-  "homepage": "https://github.com/malacca/react-native-bqgame",
+  "homepage": "https://github.com/malacca/react-native-viewpager-list",
   "license": "MIT",
   "licenseFilename": "LICENSE",
   "readmeFilename": "README.md",
