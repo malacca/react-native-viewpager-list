@@ -145,7 +145,9 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
             for (int i = 0; i < mViewPositions.size(); i++) {
                 int position = mViewPositions.valueAt(i);
                 if (position >= startPosition) {
-                    mViewPositions.setValueAt(i, position + count);
+                    // todo: setValueAt 性能好, 但需要 sdkVersion 为 29, 当前 RN 为 28
+                    //mViewPositions.setValueAt(i, position + count);
+                    mViewPositions.put(mViewPositions.keyAt(i), position + count);
                 }
             }
         }
@@ -163,7 +165,9 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
                 if (position < startPosition + count) {
                     mViewPositions.removeAt(i);
                 } else {
-                    mViewPositions.setValueAt(i, position - count);
+                    // todo: 同上
+                    //mViewPositions.setValueAt(i, position - count);
+                    mViewPositions.put(mViewPositions.keyAt(i), position - count);
                 }
             }
         }
