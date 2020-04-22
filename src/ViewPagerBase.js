@@ -1,4 +1,4 @@
-import React from 'react';
+import React,{PureComponent} from 'react';
 import {requireNativeComponent, UIManager, findNodeHandle, StyleSheet, View} from 'react-native';
 import splitLayoutProps from 'react-native/Libraries/StyleSheet/splitLayoutProps';
 
@@ -20,8 +20,46 @@ function makeTransformer(type, props) {
   return transformer;
 }
 
+// 刷新组件 wrapper, 将该组件提取出来而不在父组件通过 state 更新
+// 这样可以避免重新 render ViewPager, 且可增加一个 enabled 方法
+class PagerRefresh extends PureComponent {
+  state = {
+    refreshing:false,
+    enabled:false,
+  }
+  enabled = (enabled) => {
+    if (this.state.enabled !== enabled) {
+      this.setState({enabled});
+    }
+  }
+  _endRefresh = () => {
+    this.setState({
+      refreshing:false
+    })
+  }
+  _onRefresh = () => {
+    const onRefresh = this.props.refreshControl.props.onRefresh;
+    if (onRefresh) {
+      this.setState({
+        refreshing:true
+      });
+      onRefresh(this._endRefresh);
+    }
+  }
+  render(){
+    const {refreshControl, ...props} = this.props;
+    props.refreshing = this.state.refreshing;
+    props.enabled = this.state.enabled;
+    props.onRefresh = this._onRefresh;
+    return React.cloneElement(
+      refreshControl,
+      props
+    );
+  }
+}
+
 const eventListenrs = ['onPageScroll', 'onPageScrollStateChanged', 'onPageSelected', 'onPageChanged'];
-export default class extends React.PureComponent {
+export default class extends PureComponent {
   _childrenCount = 0;
   _getItemIndex = 0;
   _getItemCallback = {};
@@ -33,6 +71,7 @@ export default class extends React.PureComponent {
   _scrollState = 0;
   _scrollPage = 0;
   _autPlayTimer = null;
+  _refreshRef = null;
   constructor(props) {
     super(props);
     // 背景 view, 仅初始化时有效
@@ -188,7 +227,15 @@ export default class extends React.PureComponent {
         }
         this._scrollPage = msg.position;
         this._startAutoPlay();
+        this._enableRefresh();
       }
+    }
+  }
+
+  // 禁用/启用 下拉刷新
+  _enableRefresh = () => {
+    if (this._refreshRef) {
+      this._refreshRef.enabled(this._scrollPage === 0)
     }
   }
 
@@ -233,7 +280,25 @@ export default class extends React.PureComponent {
       ...leftProps
     } = this.props;
 
-    // 设置需要监听的事件(如果 loop, 需监听 onPageChanged)
+    // 当前选中 page 
+    const currentItem = 'currentItem' in leftProps
+      ? this._getShowItem(currentItem)
+      : undefined;
+
+    // 边缘水波纹 (loop 模式缺省不显示)
+    const disableWave = 'disableWave' in leftProps 
+      ? Boolean(leftProps.disableWave)
+      : (this._isLoop ? true : undefined);
+
+    // 下拉刷新组件(最起码RN自带的) 与 Viewpager 有冲突
+    // 当滑到最后一个时, 无法显示 viewpager 的水波纹效果
+    // 好在自带 Refresh 有一个 enabled 属性, 未在顶端时可禁用来修复这个问题
+    // 0:不需要下拉刷新, 1:本身就不需要水波纹, 2:需要下拉刷新+水波纹
+    const useRefresh = !horizontal && refreshControl ? (
+      disableWave ? 1 : 2
+    ) : 0;
+
+    // 设置需要监听的事件(如果 loop/autoplay/useRefresh, 需监听 onPageChanged)
     const listeners = {};
     eventListenrs.forEach(k => {
       if (k in leftProps && leftProps[k]) {
@@ -243,7 +308,7 @@ export default class extends React.PureComponent {
     if (!listeners.onPageScrollStateChanged && autoplay) {
       listeners.onPageScrollStateChanged = true;
     }
-    if (!listeners.onPageChanged && (autoplay || this._isLoop)) {
+    if (!listeners.onPageChanged && (autoplay || this._isLoop || useRefresh>1)) {
       listeners.onPageChanged = true;
     }
 
@@ -261,16 +326,6 @@ export default class extends React.PureComponent {
       }
     }
 
-    // 边缘水波纹 (loop 模式缺省不显示)
-    const disableWave = 'disableWave' in leftProps 
-      ? Boolean(leftProps.disableWave)
-      : (this._isLoop ? true : undefined);
-
-    // 当前选中 page 
-    const currentItem = 'currentItem' in leftProps
-      ? this._getShowItem(currentItem)
-      : undefined;
-
     const props = {
       ref:"pager",
       style,
@@ -284,15 +339,27 @@ export default class extends React.PureComponent {
       withBackgroundView,
       ...extraProps
     };
-    if (horizontal || !refreshControl) {
+    if (useRefresh === 0) {
       return <RNViewpager2 {...props} />
     }
     const {outer, inner} = splitLayoutProps(StyleSheet.flatten(props.style));
-    props.style = inner;
-    return React.cloneElement(
+    props.style = [styles.baseVertical, inner];
+    const refreshProps = {
       refreshControl,
-      {style: outer},
-      <RNViewpager2 {...props} />
-    );
+      style:[styles.baseVertical, outer]
+    };
+    if (useRefresh > 1) {
+      refreshProps.ref = r => this._refreshRef=r
+    }
+    return <PagerRefresh {...refreshProps}><RNViewpager2 {...props} /></PagerRefresh>
   }
 }
+
+const styles = StyleSheet.create({
+  baseVertical: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexDirection: 'column',
+    overflow: 'scroll',
+  }
+});

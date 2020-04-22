@@ -2,6 +2,11 @@ import React from 'react';
 import {View} from 'react-native';
 import ViewPagerBase from './ViewPagerBase';
 
+function getInt(v) {
+  v = parseInt(v);
+  return typeof v === "number" && isFinite(v) && Math.floor(v) === v ? v : null;
+}
+
 /**
  * 针对 viewpager item 特别多的情况
  * 可使用这个, 可较大改善内存占用
@@ -65,50 +70,66 @@ class ViewPagerList extends ViewPagerBase {
   }
 
   // 追加 list 数据
-  push = (data) => {
-    this.insert(this._viewPageData.length, data);
+  push = (data, selected) => {
+    this.insert(data, this._viewPageData.length, selected);
   }
 
   // 在 index 位置插入 data (index 本身也会被替换)
   // index 可缺省, 默认为 0
-  insert = (data, index) => {
+  insert = (data, index, selected) => {
     data=data||[];
     if (data.length > 0) {
       index = index === undefined ? 0 : index;
       const Len = this._viewPageData.length;
       this._viewPageData.splice(index, 0, ...data);
-      this._updateCount(this._isLoop || index < Len, true);
+      this._updateCount(this._isLoop || index < Len, true, selected);
     }
   }
 
   // 从 index 位置开始移除 length 个(含 index)
   // length 可缺省, 默认为 1
-  remove = (index, length) => {
+  remove = (index, length, selected) => {
     length = length === undefined ? 1 : length;
     if (length > 0) {
       this._viewPageData.splice(index, length);
-      this._updateCount(true, true);
+      this._updateCount(true, true, selected);
     }
   }
 
   // 一次性更新 list 数据
-  update = (listData) => {
+  update = (listData, selected) => {
     const Len = this._viewPageData.length;
     this._viewPageData = listData||[];
-    this._updateCount(true, Len !== this._viewPageData.length);
+    this._updateCount(true, Len !== this._viewPageData.length, selected);
   }
 
-  // 数据发生变化
-  _updateCount = (reset, notice) => {
+  // 数据长度发生变化
+  _updateCount = (reset, notice, selected) => {
     this._setCount(this._viewPageData.length);
     if (reset) {
       for (let from in this._recyleIndex) {
         this._updateSubView(from, this._recyleIndex[from])
       }
     }
+    selected = getInt(selected);
     if (notice) {
-      this._sendCommand('setCount', [this._getLoopCount()]);
+      const args = [this._getLoopCount()];
+      if (selected !== null) {
+        args.push(selected);
+      }
+      this._sendCommand('setCount', args);
+    } else if (selected !== null) {
+      this.setCurrentItem(selected, false);
     }
+  }
+
+  // 获取当前列表所有数据 或 指定index的数据
+  getItem = (index) => {
+    index = getInt(index);
+    if (index === null) {
+      return this._viewPageData;
+    }
+    return index >=0 && index < this._viewPageData.length ? this._viewPageData[index] : null; 
   }
 
   // 更新 index 数据并重新 render

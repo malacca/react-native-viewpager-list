@@ -52,11 +52,11 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager-list';
    //该参数仅在首次有效, 创建后更改无效
    getBackground={ReactComponent|Function} 
 
-    // 下拉刷新, 与 ScrollView 使用方式一致, 仅支持垂直视图
+    // 下拉刷新, 与 ScrollView 使用方式基本一致, 仅支持垂直视图
     refreshControl={
         <RefreshControl
-        refreshing={this.state.refreshing}
-        onRefresh={this._onRefresh}
+            tintColor=""
+            onRefresh={this._onRefresh}
         />
     }
 
@@ -69,6 +69,18 @@ import {ViewPager, ViewPagerList} from 'react-native-viewpager-list';
     //页面切换完成后触发
     onPageChanged={({position}) => {}}
 />
+```
+
+## `refreshControl` 属性
+
+与 ScrollView 不同之处在于，不需要设置 `refreshing` 属性，若不使用 RN 自带的 `refreshControl` 刷新器，需保证自行使用的刷新器至少要支持 `refreshing`、`enabled`、`onRefresh` 三个属性（若不支持的话，可考虑套一层 wrapper）。回调函数会有一个函数参数，完成数据更新后，只需要调用一下即可，使用方法如下
+
+```js
+_onRefresh = (resolve) => {
+    setTimeout(() => {
+        resolve()
+    }, 3000);
+}
 ```
 
 ## `ViewPagerList` 专用
@@ -94,24 +106,29 @@ renderItem = (item, index) => {
 }
 ```
 
-### `update` / `push` / `updateItem` / `renderItem`
+### `push` / `insert` / `remove` / `update`
+### `updateItem` / `renderItem`
 
 `initData` 属性仅在创建时有效, 后续更新无效, 若更新数据, 必须使用以下函数，需要给 `ViewPagerList` 设置 `ref` 属性，之后就可以调用 API 了
 
 ```js
 // 追加一批数据
-this.refs.pager.push(Array)
+this.refs.pager.push(Array, selected)
 
 // 在 index 位置插入 data (index 本身也会被替换)
 // index 可缺省, 默认为 0, 即插入到开头
-this.refs.pager.insert(Array, index)
+this.refs.pager.insert(Array, index, selected)
 
 // 从 index 位置开始移除 length 个(含 index)
 // length 可缺省, 默认为 1
-this.refs.pager.remove(Array, index)
+this.refs.pager.remove(Array, index, selected)
 
 // 一次性更新所有数据, 可放心使用, 会自动按需更新
-this.refs.pager.update(Array)
+this.refs.pager.update(Array, selected)
+
+// 备注: 以上四个函数可额外指定一个 selected 参数
+// 在更新完数据后, 将 viewpager 定位到指定页面, 可缺省
+//---------------------------------------------------
 
 // 更新指定 page 的数据
 this.refs.pager.updateItem(index, data);

@@ -297,9 +297,14 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
         }
         switch (commandId) {
             case "setCount":
+                int selected = args.size() > 1 ? args.getInt(1) : -1;
+                boolean scrollBefore = selected < adapter.getItemCount();
+                if (selected != -1 && scrollBefore) {
+                    scrollToIndex(view, selected, false);
+                }
                 adapter.setItemCount(args.getInt(0));
-                if (args.size() > 1) {
-                    scrollToIndex(view, args.getInt(1), false);
+                if (!scrollBefore) {
+                    scrollToIndex(view, selected, false);
                 }
                 break;
             case "insertCount":
