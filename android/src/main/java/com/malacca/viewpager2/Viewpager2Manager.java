@@ -56,6 +56,7 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
         vp.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             private int scrollState = -1;
             private int scrollPosition = -1;
+            private int lastPosition = -1;
 
             @Override
             public void onPageScrollStateChanged(int state) {
@@ -92,6 +93,10 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
 
             // 滑动结束, 切换完成
             private void onPageChanged(int position) {
+                if (position == lastPosition) {
+                    return;
+                }
+                lastPosition = position;
                 adapter.sendPageScrollEvent("onPageChanged", position);
                 if (!scrollToLastSelectedItem(vp, adapter)) {
                     adapter.bindBackgroundView(position);

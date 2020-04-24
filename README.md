@@ -177,3 +177,13 @@ pager.beginFakeDrag();
 pager.fakeDragBy(30);
 pager.endFakeDrag();
 ```
+
+## 额外说明
+
+未防止 Page 内有监听 touch move 的相关组件，并未阻止子视图的 touch 事件；但这会带来一定困扰，比如在 Page 内使用 `Touchable**` 系列组件，绑定 `onPress` 事件，在拖拽切换页面时，如果拖拽的锚点刚好是 `Touchable**` 组件，仍然会触发 `onPress`；这显然是不符合预期的，若需要 `Touchable**` 组件的 `onPress` 事件仅在页面静止状态下点击触发，可使用以下方案
+
+```js
+<ViewPager 
+    onMoveShouldSetResponderCapture = {() => true}
+/>
+```

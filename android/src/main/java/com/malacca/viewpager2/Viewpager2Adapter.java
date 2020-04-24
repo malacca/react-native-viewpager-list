@@ -5,10 +5,9 @@ import java.util.ArrayList;
 
 import android.view.View;
 import android.view.ViewGroup;
-import androidx.core.view.ViewCompat;
 import android.util.SparseArray;
-import android.util.SparseIntArray;
 import android.widget.FrameLayout;
+import androidx.core.view.ViewCompat;
 import androidx.annotation.NonNull;
 import android.annotation.SuppressLint;
 import androidx.recyclerview.widget.RecyclerView;
@@ -34,6 +33,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     int lastSelectedItem = -1;
 
     private ViewPager2 mViewpager2;
+    private RecyclerView mRecyclerView;
     private ReadableMap eventListeners;
     private RCTEventEmitter mEventEmitter;
     private Boolean itemIsChild;
@@ -42,11 +42,10 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     private final List<View> mViews = new ArrayList<>();
     private SparseArray<ViewHolder> recycledViewHolders;
     private SparseArray<ViewHolder> emptyViewHolders;
-    private SparseIntArray mViewPositions;
+    private int itemCount = 0;
+    private int currentHolderId = 0;
     private View backgroundView;
     private int backgroundViewPosition = -1;
-    private int currentHolderId = 0;
-    private int itemCount = 0;
 
     Viewpager2Adapter(ThemedReactContext reactContext, ViewPager2 viewpager2) {
         mEventEmitter = reactContext.getJSModule(RCTEventEmitter.class);
@@ -139,38 +138,13 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
             removeItemRange(count, itemCount - count);
         }
     }
+
     void insertItemRange(int startPosition, int count) {
-        // 修正 mViewPositions
-        if (mViewPositions != null) {
-            for (int i = 0; i < mViewPositions.size(); i++) {
-                int position = mViewPositions.valueAt(i);
-                if (position >= startPosition) {
-                    // todo: setValueAt 性能好, 但需要 sdkVersion 为 29, 当前 RN 为 28
-                    //mViewPositions.setValueAt(i, position + count);
-                    mViewPositions.put(mViewPositions.keyAt(i), position + count);
-                }
-            }
-        }
         itemCount = itemCount + count;
         notifyItemRangeInserted(startPosition, count);
     }
+
     void removeItemRange(int startPosition, int count) {
-        // 修正 mViewPositions
-        if (mViewPositions != null) {
-            for (int i = 0; i < mViewPositions.size(); i++) {
-                int position = mViewPositions.valueAt(i);
-                if (position < startPosition) {
-                    continue;
-                }
-                if (position < startPosition + count) {
-                    mViewPositions.removeAt(i);
-                } else {
-                    // todo: 同上
-                    //mViewPositions.setValueAt(i, position - count);
-                    mViewPositions.put(mViewPositions.keyAt(i), position - count);
-                }
-            }
-        }
         itemCount = itemCount - count;
         notifyItemRangeRemoved(startPosition, count);
     }
@@ -178,6 +152,12 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     @Override
     public int getItemCount() {
         return getItemIsChild() ? mViews.size() : itemCount;
+    }
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        mRecyclerView = recyclerView;
     }
 
     @NonNull
@@ -266,12 +246,6 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         if (from == -1) {
             return false;
         }
-        if (isWithBackgroundView()) {
-            if (mViewPositions == null) {
-                mViewPositions = new SparseIntArray();
-            }
-            mViewPositions.put(from, position);
-        }
         WritableMap event = Arguments.createMap();
         event.putString("event", "bindViewHolder");
         event.putInt("from", from);
@@ -325,46 +299,32 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         recycledViewHolders.remove(holder.holderId);
     }
 
-    // 移动 backgroundView 到当前 item
+    // 设置 backgroundView 到指定 position 的 itemView
     void bindBackgroundView(int position) {
         if (!isWithBackgroundView()) {
             return;
         }
-        int mViewPosition = position;
-        if (!getItemIsChild()) {
-            if (mViewPositions == null) {
-                backgroundViewPosition = position;
-                return;
-            }
-            int positionIndex = mViewPositions.indexOfValue(position);
-            if (positionIndex == -1) {
-                return;
-            }
-            mViewPosition = mViewPositions.keyAt(positionIndex);
-        }
-        View view = mViews.get(mViewPosition);
-        if (view == null) {
+        RecyclerView.ViewHolder holder = mRecyclerView == null ? null
+                : mRecyclerView.findViewHolderForAdapterPosition(position);
+        FrameLayout container = holder == null ? null : (FrameLayout) holder.itemView;
+        if (container == null) {
+            backgroundViewPosition = position;
             return;
         }
-        FrameLayout viewParent = (FrameLayout) view.getParent();
         FrameLayout backgroundParent = (FrameLayout) backgroundView.getParent();
-        if (viewParent != null && viewParent == backgroundParent) {
-            return;
-        }
         if (backgroundParent != null) {
+            if (container == backgroundParent) {
+                return;
+            }
             backgroundParent.removeView(backgroundView);
         }
-        if (viewParent == null) {
-            // 初始化时, mView 可能还未 bind 到 viewHolder, 这里仅记录下 position
-            backgroundViewPosition = position;
-        } else {
-            viewParent.addView(backgroundView, 0);
-        }
+        container.addView(backgroundView, 0);
     }
 
-    // 若有记录, 绑定 backgroundView 到 viewHolder
+    // bindBackgroundView 时, 要插入 backgroundView 的 position 还未创建 viewHolder
+    // 此时在 onBindViewHolder 成功后, 绑定 backgroundView 到 viewHolder
     private void initBackgroundView(FrameLayout container, int position) {
-        if (backgroundViewPosition == -1 || backgroundViewPosition != position) {
+        if (!isWithBackgroundView() || backgroundViewPosition == -1 || backgroundViewPosition != position) {
             return;
         }
         backgroundViewPosition = -1;

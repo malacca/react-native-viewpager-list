@@ -20,8 +20,16 @@ function makeTransformer(type, props) {
   return transformer;
 }
 
-// 刷新组件 wrapper, 将该组件提取出来而不在父组件通过 state 更新
-// 这样可以避免重新 render ViewPager, 且可增加一个 enabled 方法
+/**
+ * 给 viewpager 设定的 refresh 组件添加一层 wrapper
+ * 这样原本的 refresh 组件就不需要管理 refreshing 状态了
+ * 只需要绑定 onRefresh 回调, 设置其他支持属性(如 tintColor) 即可
+ * 这也的好处是下拉刷新不再读取整个组件树, 而是仅 render 当前 PagerRefresh
+ * 另外 PagerRefresh 支持动态 enable 以修正 viewpager 水波纹效果
+ * 
+ * 所指定的 refresh 组件需要支持以下属性
+ * refreshing、enabled、onRefresh
+ */
 class PagerRefresh extends PureComponent {
   state = {
     refreshing:false,
@@ -51,10 +59,7 @@ class PagerRefresh extends PureComponent {
     props.refreshing = this.state.refreshing;
     props.enabled = this.state.enabled;
     props.onRefresh = this._onRefresh;
-    return React.cloneElement(
-      refreshControl,
-      props
-    );
+    return React.cloneElement(refreshControl, props);
   }
 }
 
@@ -273,26 +278,23 @@ export default class extends PureComponent {
     const {
       style,
       autoplay,
-      refreshControl,
-      disableSwipe,
       horizontal,
+      currentItem,
       transformer,
+      disableSwipe,
+      refreshControl,
       ...leftProps
     } = this.props;
-
-    // 当前选中 page 
-    const currentItem = 'currentItem' in leftProps
-      ? this._getShowItem(currentItem)
-      : undefined;
 
     // 边缘水波纹 (loop 模式缺省不显示)
     const disableWave = 'disableWave' in leftProps 
       ? Boolean(leftProps.disableWave)
       : (this._isLoop ? true : undefined);
 
-    // 下拉刷新组件(最起码RN自带的) 与 Viewpager 有冲突
-    // 当滑到最后一个时, 无法显示 viewpager 的水波纹效果
-    // 好在自带 Refresh 有一个 enabled 属性, 未在顶端时可禁用来修复这个问题
+    // 下拉刷新组件(最起码RN自带的那个) 与 Viewpager 有冲突
+    // 当滑到最后一个继续上拉, 无法显示 viewpager 的水波纹效果
+    // 好在自带 Refresh 有一个 enabled 属性, 在 viewpager 不处于顶端时禁用
+    // 这样就可以抵消冲突, 在最后一个上拉时显示水波纹效果
     // 0:不需要下拉刷新, 1:本身就不需要水波纹, 2:需要下拉刷新+水波纹
     const useRefresh = !horizontal && refreshControl ? (
       disableWave ? 1 : 2
@@ -327,17 +329,18 @@ export default class extends PureComponent {
     }
 
     const props = {
+      ...leftProps,
+      ...extraProps,
       ref:"pager",
       style,
+      listeners,
+      horizontal,
       disableWave,
       disableSwipe,
-      currentItem,
-      horizontal,
-      transformer: makeTransformer(transformer, leftProps),
-      listeners,
-      onViewpager2Event: this._onViewpager2Event.bind(this),
       withBackgroundView,
-      ...extraProps
+      currentItem: this._getShowItem(currentItem),
+      transformer: makeTransformer(transformer, leftProps),
+      onViewpager2Event: this._onViewpager2Event.bind(this),
     };
     if (useRefresh === 0) {
       return <RNViewpager2 {...props} />

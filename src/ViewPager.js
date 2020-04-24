@@ -47,14 +47,17 @@ class ViewPager extends ViewPagerBase {
   }
   
   render() {
-    const children = this.props.children;
-    this._setCount(children.length);
-    this._computeBeforeRender();
-    return this._renderViewpager({
+    const {offscreenPageLimit, children} = this.props;
+    const props = {
       itemIsChild: true,
-      offscreenPageLimit: this.props.offscreenPageLimit,
-      children: this._renderSubViews(children)
-    })
+      offscreenPageLimit: offscreenPageLimit,
+    }
+    if (children) {
+      this._setCount(children.length);
+      props.children = this._renderSubViews(children);
+    }
+    this._computeBeforeRender();
+    return this._renderViewpager(props);
   }
 }
 
