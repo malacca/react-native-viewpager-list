@@ -35,8 +35,9 @@ class ViewPagerList extends ViewPagerBase {
     // _itemCacheSize 默认根据上述公式计算, 且保持只增不减, 支持通过 itemSize 来设置一屏几个
     // 这里的 itemCacheSize 仅针对一般情况, 但实际使用中可能出现预置 view 不够用的情况
     // 在不够用时, js 会接收到 addViewHolder 消息, 此时需增加子 view
+    // 若期望一次性够用, 可根据实际场景设置 itemSize 来调节, 在创建时就多弄几个 view
     const {transformer, itemSize} = props;
-    const itemSizeAuto = transformer === 'card' ? (itemSize ? itemSize : 3) : 1;
+    const itemSizeAuto = (itemSize ? itemSize : 1) + (transformer === 'card' ? 3 : 0);
     this._itemCacheSize = 5 + 2 * Math.max(0, offscreenPageLimit) + itemSizeAuto - 1;
   }
 

@@ -157,7 +157,7 @@ export default class extends PureComponent {
   // 获取要设置的 currentItem (处理 loop 的情况)
   _getShowItem = (index) => {
     index = parseInt(index||0);
-    index = Math.min(this._childrenCount - 1, Math.max(0, index));
+    index = Math.max(0, Math.min(this._childrenCount - 1, index));
     return this._isLoop ? index + 1 : index;
   }
 
