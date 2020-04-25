@@ -180,10 +180,49 @@ pager.endFakeDrag();
 
 ## 额外说明
 
-未防止 Page 内有监听 touch move 的相关组件，并未阻止子视图的 touch 事件；但这会带来一定困扰，比如在 Page 内使用 `Touchable**` 系列组件，绑定 `onPress` 事件，在拖拽切换页面时，如果拖拽的锚点刚好是 `Touchable**` 组件，仍然会触发 `onPress`；这显然是不符合预期的，若需要 `Touchable**` 组件的 `onPress` 事件仅在页面静止状态下点击触发，可使用以下方案
+Page 内部也有可能也有 touchmove 相关的组件, 所以 viewpager 默认并未阻止该类型事件，但这会给以下使用场景造成困扰
 
 ```js
-<ViewPager 
-    onMoveShouldSetResponderCapture = {() => true}
-/>
+import React from 'react';
+import {View, TouchableOpacity} from 'react-native';
+import {ViewPager} from 'react-native-viewpager-list';
+
+class App extends React.Component {
+  render(){
+    return <ViewPager>
+        <View>
+            <TouchableOpacity onPress={() => {}}/>
+        </View>
+    </ViewPager>
+  }  
+}
+```
+
+按住 `TouchableOpacity` 拖拽切换 `ViewPager` 到下一个页面，此时会触发 `onPress` 事件，这并不符合期望；实际所需要的是点击 `TouchableOpacity` 且不发生页面切换，才响应  `onPress` 事件，可通过以下方式解决。
+
+
+```js
+class App extends React.Component {
+  
+  _pageState = 0;
+  _onPageStateChange = ({state}) => {
+      this._pageState = state;
+  }  
+
+  // _pageState !== 0 意味着发生了拖拽, 此时阻止子视图响应 touch 事件
+  _onMoveShouldSetResponderCapture = () => {
+      return this._pageState !== 0;
+  }
+ 
+  render(){
+    return <ViewPager
+        onPageScrollStateChanged={this._onPageStateChange}
+        onMoveShouldSetResponderCapture={this._onMoveShouldSetResponderCapture}
+    >
+        <View>
+            <TouchableOpacity onPress={() => {}}/>
+        </View>
+    </ViewPager>
+  }  
+}
 ```
