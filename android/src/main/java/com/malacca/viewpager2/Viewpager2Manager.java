@@ -148,9 +148,9 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
     }
 
     // 当前显示
-    @ReactProp(name = "currentItem")
-    public void setCurrentItem(ViewPager2 view, int currentItem) {
-        scrollToIndex(view, currentItem, false);
+    @ReactProp(name = "currentIndex")
+    public void setCurrentItem(ViewPager2 view, int currentIndex) {
+        scrollToIndex(view, currentIndex, false);
     }
 
     // 离屏预加载个数 (使用子view的情况, 可中途修改)
@@ -318,12 +318,12 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
             case "removeCount":
                 adapter.removeItemRange(args.getInt(0), args.getInt(1));
                 break;
-            case "setCurrentItem":
+            case "setCurrentIndex":
                 scrollToIndex(view, args.getInt(0), args.getBoolean(1));
                 break;
-            case "getCurrentItem":
+            case "getCurrentIndex":
                 WritableMap event = Arguments.createMap();
-                event.putString("event", "getCurrentItem");
+                event.putString("event", "getCurrentIndex");
                 event.putString("index", args.getString(0));
                 event.putInt("item", view.getCurrentItem());
                 adapter.sendEvent(event);

@@ -12,7 +12,6 @@ function getInt(v) {
  * 可使用这个, 可较大改善内存占用
  */
 class ViewPagerList extends ViewPagerBase {
-  _isPagerList = true;
   _offscreenPage = null;
   _itemCacheSize = 0;
   _viewPageData = [];
@@ -25,7 +24,7 @@ class ViewPagerList extends ViewPagerBase {
 
     // android native 端使用 viewpager2, 离屏 offscreenPageLimit 个数影响到 复用view 的个数
     // 若修改参数导致复用 view 数减少, 会使 native 与 js 配合变得复杂许多
-    // 考虑到这种情况很少, 所以干脆不支持 offscreenPageLimit 仅支持首次设置
+    // 考虑到这种情况很少, 干脆 offscreenPageLimit 仅支持首次设置
     const {offscreenPageLimit=-1} = props;
     this._offscreenPage = offscreenPageLimit;
 
@@ -45,16 +44,17 @@ class ViewPagerList extends ViewPagerBase {
     return this._childrenCount + (this._isLoop ? 2 : 0);
   }
 
-  // 首次挂载, 需命令通知 currentItem, 因为首次传递 props.currentItem 时
-  // native 端 viewpager 的子 view 个数为 0, currentItem 会被忽略
+  // 首次挂载, 需命令通知 currentIndex, 因为首次传递 props.currentIndex 时
+  // native 端 viewpager 的子 view 个数为 0, currentIndex 会被忽略
   componentDidMount(){
     this._sendCommand('setCount', [
       this._getLoopCount(),
-      this._getShowItem(this.props.currentItem)
+      this._getShowIndex(this.props.currentIndex)
     ]);
+    this._startAutoPlay();
   }
 
-  // loop 发生变动, 需修正
+  // loop 发生变动, 需修正, 通过 insertCount/removeCount 可避免 loop 变动导致的闪屏
   componentDidUpdate(prevProps){
     const loop = Boolean(this.props.loop);
     if (loop !== Boolean(prevProps.loop)) {
@@ -62,11 +62,11 @@ class ViewPagerList extends ViewPagerBase {
       if (loop) {
         this._sendCommand('insertCount', [0, 1]);
         this._sendCommand('insertCount', [this._childrenCount + 1, 1]);
+        this._startAutoPlay(true);
       } else {
         this._sendCommand('removeCount', [0, 1]);
         this._sendCommand('removeCount', [this._childrenCount, 1]);
       }
-      this._startAutoPlay(true);
     }
   }
 
@@ -120,7 +120,7 @@ class ViewPagerList extends ViewPagerBase {
       }
       this._sendCommand('setCount', args);
     } else if (selected !== null) {
-      this.setCurrentItem(selected, false);
+      this.setCurrentIndex(selected, false);
     }
   }
 
@@ -141,6 +141,16 @@ class ViewPagerList extends ViewPagerBase {
   // 不更新数据, 仅重新 render
   renderItem = (index) => {
     this._updateItem(index, true);
+  }
+
+  // 获取当前选中 page 数据
+  getCurrentItem = () => {
+    return this.getItem(this._scrollPage)
+  }
+
+  // 更新当前选中 page 的数据
+  updateCurrentItem = (data) => {
+    this._updateItem(this._scrollPage, false, data);
   }
 
   _updateItem = (index, force, data) => {

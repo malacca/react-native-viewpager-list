@@ -3,12 +3,11 @@ import ViewPagerBase from './ViewPagerBase';
 
 class ViewPager extends ViewPagerBase {
 
-  // 首次挂载, 需命令通知 currentItem, 因为首次传递 props.currentItem 时
-  // native 端 viewpager 的子 view 个数为 0, currentItem 会被忽略
+  // 首次挂载, 需命令通知 currentIndex, 因为首次传递 props.currentIndex 时
+  // native 端 viewpager 的子 view 个数为 0, currentIndex 会被忽略
   componentDidMount(){
-    this._setNativeShowItem(
-      this._getShowItem(this.props.currentItem)
-    )
+    this.setCurrentIndex(this.props.currentIndex);
+    this._startAutoPlay();
   }
 
   componentDidUpdate(prevProps){
@@ -48,15 +47,15 @@ class ViewPager extends ViewPagerBase {
   
   render() {
     const {offscreenPageLimit, children} = this.props;
+    this._setCount(children ? children.length : 0);
+    this._computeBeforeRender();
     const props = {
       itemIsChild: true,
       offscreenPageLimit: offscreenPageLimit,
     }
     if (children) {
-      this._setCount(children.length);
       props.children = this._renderSubViews(children);
     }
-    this._computeBeforeRender();
     return this._renderViewpager(props);
   }
 }

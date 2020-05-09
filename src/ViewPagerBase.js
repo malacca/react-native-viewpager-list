@@ -65,18 +65,8 @@ class PagerRefresh extends PureComponent {
 
 const eventListenrs = ['onPageScroll', 'onPageScrollStateChanged', 'onPageSelected', 'onPageChanged'];
 export default class extends PureComponent {
-  _childrenCount = 0;
-  _getItemIndex = 0;
-  _getItemCallback = {};
-  _backgroundView = null;
-  _itemStyleStatus = null;
-  _itemStyleChange = false;
-  _itemStyle = {};
-  _isLoop = false;
-  _scrollState = 0;
-  _scrollPage = 0;
-  _autPlayTimer = null;
   _refreshRef = null;
+  _backgroundView = null;
   constructor(props) {
     super(props);
     // 背景 view, 仅初始化时有效
@@ -89,90 +79,43 @@ export default class extends PureComponent {
       );
     }
   }
-  
+
   componentWillUnmount(){
     this._stopAutoPlay();
   }
 
-  // 自动播放
-  _startAutoPlay = (fromPropsChange) => {
-    this._stopAutoPlay();
-    if (!this.props.autoplay) {
-      return;
-    }
-    // 这里应该是 android viewpager2 的 bug, 在 props 更新
-    // 由 loop 转为 非loop 且当前处于开头第一个 page
-    // autoPlay 的下一个 index 为 1, 但 native 端的 currentItem 也是 1
-    // 由于二者相等, 所以自动播放无法启动 (正确情况下 native 段应该是 0 才对)
-    // 所以这里通过 fakeDrag 修正一下
-    if (fromPropsChange && !this._isLoop && this._scrollPage === 0) {
-      this.beginFakeDrag();
-      this.fakeDragBy(.5);
-      this.endFakeDrag();
-    }
-    this._autPlayTimer = setTimeout(() => {
-      this._autPlayTimer = null;
-      if (this._scrollState !== 0) {
-        return;
-      }
-      let next;
-      if (this._scrollPage >= this._childrenCount - 1) {
-        if (this.props.autoplayDirection) {
-          return;
-        }
-        next = this._isLoop ? this._childrenCount + 1 : 0;
-      } else {
-        next = this._scrollPage + (this._isLoop ? 2 : 1);
-      }
-      this._setNativeShowItem(next, true);
-    }, this.props.autoplayTimeout||2500);
+  // 获取 子view 个数
+  _childrenCount = 0;
+  getCount = () => {
+    return this._childrenCount;
   }
-
-  _stopAutoPlay = () => {
-    if (this._autPlayTimer) {
-      clearTimeout(this._autPlayTimer);
-      this._autPlayTimer = null;
-    }
-  }
-
-  // 设置 子view 个数
   _setCount = count => {
     this._childrenCount = count;
   }
 
-  // 获取 子view 个数
-  getCount = () => {
-    return this._childrenCount;
+  // 设置选中的 item index (自动修正 loop index)
+  setCurrentIndex = (index, smooth) => {
+    this._setShowIndex(this._getShowIndex(index), smooth);
   }
-
-  // 设置选中的 item (自动修正 loop index)
-  setCurrentItem = (index, smooth) => {
-    this._setNativeShowItem(this._getShowItem(index), smooth);
-  }
-
-  _setNativeShowItem = (index, smooth) => {
-    this._sendCommand('setCurrentItem', [index, Boolean(smooth)])
-  }
-
-  // 获取要设置的 currentItem (处理 loop 的情况)
-  _getShowItem = (index) => {
+  _getShowIndex = (index) => {
     index = parseInt(index||0);
     index = Math.max(0, Math.min(this._childrenCount - 1, index));
     return this._isLoop ? index + 1 : index;
   }
-
-  // 获取当前选中的 item index (异步获取)
-  getCurrentItem = () => {
-    return new Promise(resolve => {
-      const key = "index" + (++this._getItemIndex);
-      this._getItemCallback[key] = resolve;
-      this._sendCommand('getCurrentItem', [key])
-    })
+  _setShowIndex = (index, smooth) => {
+    this._sendCommand('setCurrentIndex', [index, Boolean(smooth)])
   }
 
-  // 若监听了 onPageChanged, 可同步获取当前 item index
-  currentItem = () => {
+  // 获取当前选中的 item index
+  getCurrentIndex = () => {
     return this._scrollPage;
+  }
+
+  // 动态设置是否禁用, 相比直接设置 props 性能更好
+  disable = (disabled) => {
+    this.refs.pager.setNativeProps({
+      disableSwipe: Boolean(disabled)
+    })
   }
 
   // 开始拖拽(模拟手指按下)
@@ -199,41 +142,33 @@ export default class extends PureComponent {
     UIManager.dispatchViewManagerCommand(this._nodeHandle, command, args);
   }
 
-  // 处理 native 端发送的消息
+  // 监听 native 端的消息
+  _scrollPage = 0;
   _onViewpager2Event(e) {
     const {event, ...msg} = e.nativeEvent;
-    // 对于 loop 的情况, 自动修正 position
-    if (event === 'getCurrentItem') {
-      const {index, item} = msg;
-      if (index && index in this._getItemCallback) {
-        this._getItemCallback[index](this._isLoop ? item - 1 : item);
-        delete this._getItemCallback[index];
-      }
-    } else if (eventListenrs.includes(event)) {
-      if (event === 'onPageScrollStateChanged') {
-        this._scrollState = msg.state;
-        if (this._scrollState === 0) {
-          this._startAutoPlay();
-        }
-      } else if (this._isLoop) {
-        msg.position = msg.position - 1;
-      }
-      this.props[event] && this.props[event](msg);
-      // loop 模式在滑到边界 item 时, 修正 currentItem
-      if (event === "onPageChanged") {
-        if (this._isLoop) {
-          if (msg.position < 0) {
-            this._setNativeShowItem(this._childrenCount);
-            return;
-          } else if (msg.position >= this._childrenCount) {
-            this._setNativeShowItem(1);
-            return;
-          }
-        }
-        this._scrollPage = msg.position;
+    if (event === 'onPageScrollStateChanged') {
+      if (msg.state === 0) {
         this._startAutoPlay();
-        this._enableRefresh();
+      } else if (msg.state === 1) {
+        this._stopAutoPlay();
       }
+    } else if (this._isLoop) {
+      msg.position = msg.position - 1;
+    }
+    this.props[event] && this.props[event](msg);
+    // loop 模式在滑到边界 index 时, 修正 currentIndex
+    if (event === "onPageChanged") {
+      if (this._isLoop) {
+        if (msg.position < 0) {
+          this._setShowIndex(this._childrenCount);
+          return;
+        } else if (msg.position >= this._childrenCount) {
+          this._setShowIndex(1);
+          return;
+        }
+      }
+      this._scrollPage = msg.position;
+      this._enableRefresh();
     }
   }
 
@@ -244,7 +179,49 @@ export default class extends PureComponent {
     }
   }
 
+  // 自动播放
+  _isLoop = false;
+  _autPlayTimer = null;
+  _startAutoPlay = (fromPropsChange) => {
+    this._stopAutoPlay();
+    if (!this.props.autoplay) {
+      return;
+    }
+    // 这里应该是 android viewpager2 的 bug, 在 props 更新
+    // 由 loop 转为 非loop 且当前处于开头第一个 page
+    // autoPlay 的下一个 index 为 1, 但 native 端的 currentIndex 也是 1
+    // 由于二者相等, 所以自动播放无法启动 (正确情况下 native 段应该是 0 才对)
+    // 所以这里通过 fakeDrag 修正一下
+    if (fromPropsChange && !this._isLoop && this._scrollPage === 0) {
+      this.beginFakeDrag();
+      this.fakeDragBy(.5);
+      this.endFakeDrag();
+    }
+    this._autPlayTimer = setTimeout(() => {
+      this._autPlayTimer = null;
+      let next;
+      if (this._scrollPage >= this._childrenCount - 1) {
+        if (this.props.autoplayDirection) {
+          return;
+        }
+        next = this._isLoop ? this._childrenCount + 1 : 0;
+      } else {
+        next = this._scrollPage + (this._isLoop ? 2 : 1);
+      }
+      this._setShowIndex(next, true);
+    }, this.props.autoplayTimeout||2500);
+  }
+  _stopAutoPlay = () => {
+    if (this._autPlayTimer) {
+      clearTimeout(this._autPlayTimer);
+      this._autPlayTimer = null;
+    }
+  }
+
   // 计算 item style
+  _itemStyleStatus = null;
+  _itemStyleChange = false;
+  _itemStyle = {};
   _computeBeforeRender() {
     const {horizontal, transformer="", padding=0, loop} = this.props;
     this._isLoop = loop && this._childrenCount > 1;
@@ -279,7 +256,7 @@ export default class extends PureComponent {
       style,
       autoplay,
       horizontal,
-      currentItem,
+      currentIndex,
       transformer,
       disableSwipe,
       refreshControl,
@@ -300,18 +277,20 @@ export default class extends PureComponent {
       disableWave ? 1 : 2
     ) : 0;
 
-    // 设置需要监听的事件(如果 loop/autoplay/useRefresh, 需监听 onPageChanged)
+    // 设置需要监听的事件 
+    // 1. 为了可以同步获取当前 index, 默认监听 onPageChanged
+    // 2. 如果 autoplay, 默认监听 onPageScrollStateChanged
     const listeners = {};
     eventListenrs.forEach(k => {
       if (k in leftProps && leftProps[k]) {
         listeners[k] = true
       }
     });
+    if (!listeners.onPageChanged) {
+      listeners.onPageChanged = true;
+    }
     if (!listeners.onPageScrollStateChanged && autoplay) {
       listeners.onPageScrollStateChanged = true;
-    }
-    if (!listeners.onPageChanged && (autoplay || this._isLoop || useRefresh>1)) {
-      listeners.onPageChanged = true;
     }
 
     // 是否使用 item 背景
@@ -338,7 +317,7 @@ export default class extends PureComponent {
       disableWave,
       disableSwipe,
       withBackgroundView,
-      currentItem: this._getShowItem(currentItem),
+      currentIndex: this._getShowIndex(currentIndex),
       transformer: makeTransformer(transformer, leftProps),
       onViewpager2Event: this._onViewpager2Event.bind(this),
     };
