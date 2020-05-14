@@ -15,7 +15,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.uimanager.events.Event;
+import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.ThemedReactContext;
+import com.facebook.react.uimanager.events.EventDispatcher;
 import com.facebook.react.uimanager.events.RCTEventEmitter;
 
 import com.github.malacca.widget.ViewPager2;
@@ -32,10 +35,12 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     // 这里缓存一下转换前的 selectedItem 以便转换完成后进行修正
     int lastSelectedItem = -1;
 
-    private ViewPager2 mViewpager2;
+    private final ViewPager2 mViewpager2;
+    private final RCTEventEmitter mEventEmitter;
+    private final EventDispatcher mEventDispatcher;
+
     private RecyclerView mRecyclerView;
     private ReadableMap eventListeners;
-    private RCTEventEmitter mEventEmitter;
     private Boolean itemIsChild;
     private Boolean withBackgroundView;
 
@@ -48,8 +53,9 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
     private int backgroundViewPosition = -1;
 
     Viewpager2Adapter(ThemedReactContext reactContext, ViewPager2 viewpager2) {
-        mEventEmitter = reactContext.getJSModule(RCTEventEmitter.class);
         mViewpager2 = viewpager2;
+        mEventEmitter = reactContext.getJSModule(RCTEventEmitter.class);
+        mEventDispatcher = reactContext.getNativeModule(UIManagerModule.class).getEventDispatcher();
     }
 
     // 修改切换效果前, 记录 selectedItem
@@ -354,21 +360,56 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
         sendEvent(event);
     }
 
-    void sendPageScrollEvent(int position, float positionOffset, int positionOffsetPixels) {
-        String eventType = "onPageScroll";
-        if (!eventListeners.hasKey(eventType) || !eventListeners.getBoolean(eventType)) {
-            return;
-        }
-        WritableMap event = Arguments.createMap();
-        event.putString("event", eventType);
-        event.putInt("position", position);
-        event.putDouble("offset", positionOffset);
-        event.putInt("offsetPixels", positionOffsetPixels);
-        event.putBoolean("fake", mViewpager2.isFakeDragging());
-        sendEvent(event);
-    }
-
     void sendEvent(WritableMap event) {
         mEventEmitter.receiveEvent(mViewpager2.getId(), Viewpager2Manager.EVENT_NAME, event);
+    }
+
+    // onPageScroll 通过 RN Event 规范发送, 前端可能使用 animate native
+    void sendPageScrollEvent(int position, float positionOffset, int positionOffsetPixels) {
+        if (!eventListeners.hasKey(Viewpager2Manager.EVENT_ON_SCROLL)
+                || !eventListeners.getBoolean(Viewpager2Manager.EVENT_ON_SCROLL)) {
+            return;
+        }
+        mEventDispatcher.dispatchEvent(new PageScrollEvent(
+                mViewpager2.getId(),
+                position,
+                positionOffset,
+                positionOffsetPixels,
+                mViewpager2.isFakeDragging()
+        ));
+    }
+
+    static class PageScrollEvent extends Event<PageScrollEvent> {
+        private final int mPosition;
+        private final float mOffset;
+        private final int mOffsetPixels;
+        private final boolean mFake;
+
+        PageScrollEvent(int viewTag, int position, float offset, int offsetPixels, boolean fake) {
+            super(viewTag);
+            mPosition = position;
+            mOffset = (Float.isInfinite(offset) || Float.isNaN(offset)) ? 0.0f : offset;
+            mOffsetPixels = offsetPixels;
+            mFake = fake;
+        }
+
+        @Override
+        public String getEventName() {
+            return Viewpager2Manager.EVENT_ON_SCROLL;
+        }
+
+        @Override
+        public void dispatch(RCTEventEmitter rctEventEmitter) {
+            rctEventEmitter.receiveEvent(getViewTag(), getEventName(), serializeEventData());
+        }
+
+        private WritableMap serializeEventData() {
+            WritableMap eventData = Arguments.createMap();
+            eventData.putInt("position", mPosition);
+            eventData.putDouble("offset", mOffset);
+            eventData.putDouble("offsetPixels", mOffsetPixels);
+            eventData.putBoolean("fake", mFake);
+            return eventData;
+        }
     }
 }

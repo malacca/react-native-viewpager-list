@@ -22,6 +22,7 @@ import com.github.malacca.widget.ViewPager2;
 
 public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
     static final String EVENT_NAME = "onViewpager2Event";
+    static final String EVENT_ON_SCROLL = "onPageScroll";
     private static final String REACT_CLASS = "RNViewpager2";
 
     @NonNull
@@ -39,6 +40,7 @@ public class Viewpager2Manager extends ViewGroupManager<ViewPager2> {
     public @Nullable Map<String, Object> getExportedCustomDirectEventTypeConstants() {
         return MapBuilder.<String, Object>builder()
                 .put(EVENT_NAME, MapBuilder.of("registrationName", EVENT_NAME))
+                .put(EVENT_ON_SCROLL, MapBuilder.of("registrationName", EVENT_ON_SCROLL))
                 .build();
     }
 
