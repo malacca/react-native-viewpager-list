@@ -1,7 +1,7 @@
 {
   "name": "react-native-viewpager-list",
   "title": "viewpager2 for React Native",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "viewpager2 for react-native",
   "main": "index.js",
   "repository": {

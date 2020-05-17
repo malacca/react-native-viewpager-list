@@ -407,6 +407,7 @@ public class Viewpager2Adapter extends RecyclerView.Adapter<Viewpager2Adapter.Vi
             WritableMap eventData = Arguments.createMap();
             eventData.putInt("position", mPosition);
             eventData.putDouble("offset", mOffset);
+            eventData.putDouble("totalOffset", mOffset + mPosition);
             eventData.putDouble("offsetPixels", mOffsetPixels);
             eventData.putBoolean("fake", mFake);
             return eventData;
